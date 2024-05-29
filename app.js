@@ -79,21 +79,21 @@ app.post('/bookMyEvent/login', (req,res) =>{
 
 app.post('/bookMyEvent/event', (req,res) => {
     let jwtInp = req.body.jwt;
-    User.findOne ({
-        jwt : emailinp
+    let eventDate = req.body.eventDate;
+    let eventName = req.body.eventName;
+    LoginUser.findOne ({
+        jwt : jwtInp
     }).then((user) => {
-        if(!user){
-            return res.status(500).json({error : "Not able to get in"});
-        }
        const evnt = new AddEvent({
-
+            UserToken : jwtInp,
+            event : eventName,
+            Date : eventDate
        })
-        /*
-        user.save().then(data => {
-            return res.status(200).json({message : "jwt added !!!"});
-        }).catch(err => {
-            return res.status(500).json({error : "Not able to get in"});
-        });*/
+       evnt.save().then(data => {
+        return res.status(200).json({message : "event added !!!"});
+    }).catch(err => {
+        return res.status(500).json({error : "err adding event : "+err});
+    });
     }).catch((err) => {
         return res.status(500).json({error : "Not able to find user"});
     })
