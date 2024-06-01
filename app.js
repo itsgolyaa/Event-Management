@@ -77,7 +77,7 @@ app.post('/bookMyEvent/login', (req,res) =>{
     }).catch()
 });
 
-app.post('/bookMyEvent/event', (req,res) => {
+app.post('/bookMyEvent/events', (req,res) => {
     let jwtInp = req.body.jwt;
     let eventDate = req.body.eventDate;
     let eventName = req.body.eventName;
@@ -98,4 +98,10 @@ app.post('/bookMyEvent/event', (req,res) => {
         return res.status(500).json({error : "Not able to find user"});
     })
 
+});
+
+app.get('/bookMyEvent/events/getEvent', async (req,res)=> {
+    let eId = req.query.eventId;
+    const idk = await AddEvent.findById(eId);
+   return res.status(200).json(idk.event);
 });
