@@ -11,6 +11,7 @@ require('dotenv').config();
 const jwt = require("jsonwebtoken");
 const AddEvent = require('./models/event');
 const LoginUser = require('./models/loggedInUsers');
+const Seqval = require('./models/sequenceLogic');
 const port = 3000;
 
 app.use(express.json());
@@ -77,31 +78,152 @@ app.post('/bookMyEvent/login', (req,res) =>{
     }).catch()
 });
 
-app.post('/bookMyEvent/events', (req,res) => {
+app.post('/bookMyEvent/events', async (req, res) => {
     let jwtInp = req.body.jwt;
     let eventDate = req.body.eventDate;
     let eventName = req.body.eventName;
-    LoginUser.findOne ({
-        jwt : jwtInp
-    }).then((user) => {
-       const evnt = new AddEvent({
-            UserToken : jwtInp,
-            event : eventName,
-            Date : eventDate
-       })
-       evnt.save().then(data => {
-        return res.status(200).json({message : "event added !!!"});
-    }).catch(err => {
-        return res.status(500).json({error : "err adding event : "+err});
-    });
-    }).catch((err) => {
-        return res.status(500).json({error : "Not able to find user"});
-    })
+    
+    try {
+        const user = await LoginUser.findOne({ Token: jwtInp });
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+        let NextVal = await Seqval.findOneAndUpdate(
+            { idVal: "AutoVal" },
+            { "$inc": { "seqVal": 1 } },
+            { new: true }
+        );
+        if (!NextVal) {
+            const AddVal = new Seqval({
+                idVal: "AutoVal",
+                seqVal: 1
+            });
+            await AddVal.save();
+        }
+        const evnt = new AddEvent({
+            UserToken: jwtInp,
+            event: eventName,
+            Date: eventDate,
+            eventId : NextVal.seqVal
+        });
 
+        await evnt.save();
+        return res.status(200).json({ message: "Event added!!!" });
+
+    } catch (err) {
+        return res.status(500).json({ error: "Error processing request: " + err.message });
+    }
 });
+
 
 app.get('/bookMyEvent/events/getEvent', async (req,res)=> {
     let eId = req.query.eventId;
-    const idk = await AddEvent.findById(eId);
-   return res.status(200).json(idk.event);
+    AddEvent.findOne({
+        eventId : eId
+    }).then((eventData)=>{
+        if(!eventData){
+            return res.status(404).json({message:"There is no such event"});
+        }
+        return res.status(200).json({
+            eventName : eventData.event,
+            eventDate: eventData.Date,
+            participants: eventData.Participants
+        })
+    }).catch((err)=>{
+        return res.status(404).json({message:"There is no such event for this id :"+err});
+    })
+   
+});
+
+app.post('/bookMyEvent/events/AddUsersToEvents', async (req,res)=>{
+    const Names = {
+        "Name" : req.body.pName,
+        "FeesPaid?" : req.body.pRegDoneBool
+    }
+    const participants = {
+        $set : {'Participants':Names}
+    }
+    AddEvent.findOneAndUpdate({ eventId: req.body.id }, participants, {new: true})
+    .then((data)=>{
+        return res.status(200).json({"participant is added: " :data})
+    }).catch((err)=>{
+        return res.status(404).json({message: "We dont have this event"+err});
+    })
+});
+
+app.put('/bookMyEvent/events/:eventId', async (req, res) => {
+    const { eventId } = req.params;
+    const { eventName, eventDate, jwt } = req.body;
+
+    try {
+        const user = await LoginUser.findOne({ Token: jwt });
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        const updatedEvent = await AddEvent.findOneAndUpdate(
+            { eventId },
+            { event: eventName, Date: eventDate },
+            { new: true }
+        );
+
+        if (!updatedEvent) {
+            return res.status(404).json({ error: "Event not found" });
+        }
+
+        return res.status(200).json({ message: "Event updated!!!", updatedEvent });
+
+    } catch (err) {
+        return res.status(500).json({ error: "Error updating event: " + err.message });
+    }
+});
+
+app.patch('/bookMyEvent/events/:eventId', async (req, res) => {
+    const { eventId } = req.params;
+    const { eventName, eventDate, jwt } = req.body;
+
+    try {
+        const user = await LoginUser.findOne({ Token: jwt });
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        const updatedEvent = await AddEvent.findOneAndUpdate(
+            { eventId },
+            { $set: { event: eventName, Date: eventDate } },
+            { new: true }
+        );
+
+        if (!updatedEvent) {
+            return res.status(404).json({ error: "Event not found" });
+        }
+
+        return res.status(200).json({ message: "Event partially updated!!!", updatedEvent });
+
+    } catch (err) {
+        return res.status(500).json({ error: "Error updating event: " + err.message });
+    }
+});
+
+app.delete('/bookMyEvent/events/:eventId', async (req, res) => {
+    const { eventId } = req.params;
+    const { jwt } = req.body;
+
+    try {
+        const user = await LoginUser.findOne({ Token: jwt });
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        const deletedEvent = await AddEvent.findOneAndDelete({ eventId });
+
+        if (!deletedEvent) {
+            return res.status(404).json({ error: "Event not found" });
+        }
+
+        return res.status(200).json({ message: "Event deleted!!!", deletedEvent });
+
+    } catch (err) {
+        return res.status(500).json({ error: "Error deleting event: " + err.message });
+    }
 });

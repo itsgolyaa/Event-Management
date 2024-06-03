@@ -22,6 +22,10 @@ var mongoose = require('mongoose'),
     created: {
       type: Date,
       default: Date.now
+    },
+    eventId:{
+      type: Number,
+      required:[true, "Cant proceed without event Id"]
     }
   });
   
